@@ -88,13 +88,13 @@ pallet-check-node-computational-work 						= { workspace = true }
 # Polkadot Dependencies
 #polkadot-rpc 												= { workspace = true }
 pallet-xcm 													= { workspace = true }
-xcm 														= { workspace = true }
-xcm-builder 												= { workspace = true }
-xcm-executor 												= { workspace = true }
+staging-xcm 												= { workspace = true }
+staging-xcm-builder 										= { workspace = true }
+staging-xcm-executor 										= { workspace = true }
 
 [dev-dependencies]
-static_assertions = "1.1"
-env_logger = "0.10"
+static_assertions 											= { workspace = true }
+env_logger 													= { workspace = true }
 
 
 [build-dependencies]
@@ -160,9 +160,9 @@ std = [
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"substrate-wasm-builder",
-	"xcm-builder/std",
-	"xcm-executor/std",
-	"xcm/std",
+	"staging-xcm-builder/std",
+	"staging-xcm-executor/std",
+	"staging-xcm/std",
 	"westend-runtime/std",
 	"rococo-runtime/std",
 	"bridge-hub-westend-runtime/std",
