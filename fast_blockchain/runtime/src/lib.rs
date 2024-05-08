@@ -242,6 +242,11 @@ impl frame_system::Config for Runtime {
     /// The set code logic, just the default since we're not a parachain.
     type OnSetCode = ();
     type MaxConsumers = frame_support::traits::ConstU32<16>;
+    type SingleBlockMigrations = ();
+    type MultiBlockMigrator = ();
+    type PreInherents = ();
+    type PostInherents = ();
+    type PostTransactions = ();
 }
 
 impl pallet_aura::Config for Runtime {
@@ -288,6 +293,7 @@ impl pallet_mmr::Config for Runtime {
     type Hashing = Keccak256;
     type LeafData = pallet_beefy_mmr::Pallet<Runtime>;
     type OnNewRoot = pallet_beefy_mmr::DepositBeefyDigest<Runtime>;
+    type BlockHashProvider = ();
     type WeightInfo = ();
 }
 
@@ -940,7 +946,7 @@ impl_runtime_apis! {
         }
     }
 
-    impl bp_bridge_hub_rococo::FromBridgeHubRococoInboundLaneApi<Block<Block> for Runtime {
+    impl bp_bridge_hub_rococo::FromBridgeHubRococoInboundLaneApi<Block<Block>> for Runtime {
         fn message_details(
             lane: bp_messages::LaneId,
             messages: Vec<(bp_messages::MessagePayload, bp_messages::OutboundMessageDetails)>,

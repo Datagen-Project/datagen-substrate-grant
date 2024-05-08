@@ -10,9 +10,9 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-hex-literal = "0.4.1"
-codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["max-encoded-len"] }
-scale-info = { version = "2.10.0", default-features = false, features = ["derive"] }
+hex-literal 												= { workspace = true }
+parity-scale-codec 											= { workspace = true, features = ["max-encoded-len"] }
+scale-info 													= { workspace = true, features = ["derive"] }
 
 
 # Bridge dependencies
@@ -24,7 +24,7 @@ bp-relayers 												= { workspace = true }
 bp-runtime 													= { workspace = true }
 bp-rococo 													= { workspace = true }
 bp-westend 													= { workspace = true }
-bp-xcm-bridge-hub 											= { workspace = true }
+#bp-xcm-bridge-hub 											= { workspace = true }
 bp-bridge-hub-rococo 										= { workspace = true }
 bp-bridge-hub-westend 										= { workspace = true }
 bridge-runtime-common 										= { workspace = true, features = ["integrity-test"] }
@@ -98,7 +98,7 @@ env_logger = "0.10"
 
 
 [build-dependencies]
-substrate-wasm-builder = { git = "https://github.com/paritytech/polkadot-sdk", branch = "release-polkadot-v1.8.0", optional = true}
+substrate-wasm-builder = { git = "https://github.com/paritytech/polkadot-sdk", branch = "release-polkadot-v1.11.0", optional = true}
 
 [features]
 default = [ "std" ]
@@ -112,11 +112,11 @@ std = [
 	"bp-runtime/std",
 	"bp-rococo/std",
 	"bp-westend/std",
-	"bp-xcm-bridge-hub/std",
+#	"bp-xcm-bridge-hub/std",
 	"bp-bridge-hub-rococo/std",
 	"bp-bridge-hub-westend/std",
 	"bridge-runtime-common/std",
-	"codec/std",
+	"parity-scale-codec/std",
 	"parachains-common/std",
 	"cumulus-pallet-xcmp-queue/std",
 	"collectives-westend-runtime/std",
