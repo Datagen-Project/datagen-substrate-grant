@@ -32,12 +32,12 @@ use westend_runtime::{
     BalancesConfig, BeefyConfig, GrandpaConfig, SessionConfig, SessionKeys, SudoConfig,
     SystemConfig, WASM_BINARY, BABE_GENESIS_EPOCH_CONFIG,
 };
-use xcm::v3::{NetworkId::Rococo as RococoId, NetworkId::Westend as WestednId};
+use staging_xcm::v3::{NetworkId::Rococo as RococoId, NetworkId::Westend as WestendId};
 use pallet_staking::Forcing;
 use sp_arithmetic::per_things::Perbill;
 
 /// The default XCM version to set in genesis config.
-pub const SAFE_XCM_VERSION: u32 = xcm::prelude::XCM_VERSION;
+pub const SAFE_XCM_VERSION: u32 = staging_xcm::prelude::XCM_VERSION;
 
 /// "Names" of the authorities accounts at local testnet.
 const LOCAL_AUTHORITIES_ACCOUNTS: [&str; 5] = ["Alice", "Bob", "Charlie", "Dave", "Eve"];
