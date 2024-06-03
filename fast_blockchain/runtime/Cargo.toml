@@ -13,6 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 hex-literal 												= { workspace = true }
 parity-scale-codec 											= { workspace = true, features = ["max-encoded-len"] }
 scale-info 													= { workspace = true, features = ["derive"] }
+smallvec 													= { workspace = true }
 
 
 # Bridge dependencies
@@ -25,6 +26,7 @@ bp-runtime 													= { workspace = true }
 bp-rococo 													= { workspace = true }
 bp-westend 													= { workspace = true }
 #bp-xcm-bridge-hub 											= { workspace = true }
+bp-asset-hub-westend 										= { workspace = true }
 bp-bridge-hub-rococo 										= { workspace = true }
 bp-bridge-hub-westend 										= { workspace = true }
 bridge-runtime-common 										= { workspace = true, features = ["integrity-test"] }
@@ -32,7 +34,8 @@ westend-runtime 											= { workspace = true }
 rococo-runtime 												= { workspace = true }
 bridge-hub-westend-runtime 									= { workspace = true }
 bridge-hub-rococo-runtime 									= { workspace = true }
-asset-hub-rococo-runtime 									= { workspace = true }
+assets-common 												= { workspace = true }
+#asset-hub-rococo-runtime 									= { workspace = true }
 asset-hub-westend-runtime 									= { workspace = true }
 
 pallet-bridge-grandpa 										= { workspace = true }
@@ -113,9 +116,11 @@ std = [
 	"bp-rococo/std",
 	"bp-westend/std",
 #	"bp-xcm-bridge-hub/std",
+	"bp-asset-hub-westend/std",
 	"bp-bridge-hub-rococo/std",
 	"bp-bridge-hub-westend/std",
 	"bridge-runtime-common/std",
+	"assets-common/std",
 	"parity-scale-codec/std",
 	"parachains-common/std",
 	"cumulus-pallet-xcmp-queue/std",
@@ -167,7 +172,7 @@ std = [
 	"rococo-runtime/std",
 	"bridge-hub-westend-runtime/std",
 	"bridge-hub-rococo-runtime/std",
-	"asset-hub-rococo-runtime/std",
+#	"asset-hub-rococo-runtime/std",
 	"asset-hub-westend-runtime/std",
 ]
 runtime-benchmarks = [
