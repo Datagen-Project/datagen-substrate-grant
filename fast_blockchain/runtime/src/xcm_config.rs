@@ -35,7 +35,7 @@ use bridge_hub_westend_runtime::{
 use parachains_common::impls::ToStakingPot;
 use westend_runtime::{xcm_config::ThisNetwork, AllPalletsWithSystem};
 use staging_xcm::latest::prelude::*;
-use staging_xcm::v3::{InteriorMultiLocation, MultiLocation};
+use staging_xcm::v3::{InteriorMultiLocation};
 use staging_xcm_builder::{
     Account32Hash, AccountId32Aliases, CurrencyAdapter as XcmCurrencyAdapter, IsConcrete,
     MintLocation, SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation,

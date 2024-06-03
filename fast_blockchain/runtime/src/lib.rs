@@ -44,12 +44,12 @@ use bridge_hub_westend_runtime::{
         ActiveOutboundLanesToBridgeHubRococo, AssetHubWestendParaId,
         MaxUnconfirmedMessagesAtInboundLane, MaxUnrewardedRelayerEntriesAtInboundLane,
         ToBridgeHubRococoXcmBlobHauler,
-        WithBridgeHubRococoMessageBridge, BridgeHubRococo, BridgeHubWestend, BridgeParachainRococoInstance,
+        WithBridgeHubRococoMessageBridge,
         OnBridgeHubWestendRefundBridgeHubRococoMessages,
         BridgeWestendToRococoMessagesPalletInstance,
     },
     xcm_config::XcmRouter,
-    BridgeRejectObsoleteHeadersAndMessages, CollatorSelection, XcmpQueue,
+    CollatorSelection, XcmpQueue,
 };
 use bridge_runtime_common::{
     messages::source::{TargetHeaderChainAdapter, FromThisChainMaximalOutboundPayloadSize},
@@ -109,7 +109,6 @@ pub use pallet_xcm::Call as XcmCall;
 use bridge_runtime_common::generate_bridge_reject_obsolete_headers_and_messages;
 use bridge_runtime_common::messages_xcm_extension::SenderAndLane;
 use frame_support::traits::EitherOfDiverse;
-use frame_system::EnsureRoot;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -563,7 +562,7 @@ impl pallet_xcm_bridge_hub_router::Config<ToWestendXcmRouterInstance> for Runtim
     #[cfg(feature = "runtime-benchmarks")]
     type BridgeHubOrigin = EitherOfDiverse<
         // for running benchmarks
-        EnsureRoot<AccountId>,
+        frame_system::EnsureRoot<AccountId>,
         // for running tests with `--feature runtime-benchmarks`
         EnsureXcm<Equals<xcm_config::bridging::SiblingBridgeHub>>,
     >;
@@ -656,11 +655,11 @@ construct_runtime!(
     }
 );
 
-// generate_bridge_reject_obsolete_headers_and_messages! {
-//     Call, AccountId,
-//     BridgeRococoGrandpa, BridgeRococoMessages,
-//     BridgeRococoParachains
-// }
+generate_bridge_reject_obsolete_headers_and_messages! {
+    RuntimeCall, AccountId,
+    BridgeRococoGrandpa, BridgeRococoMessages
+    // BridgeRococoParachains
+}
 
 /// The address format for describing accounts.
 pub type Address = AccountId;
