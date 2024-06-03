@@ -16,17 +16,17 @@
 
 //! XCM configurations for the Millau runtime.
 
-use super::{AccountId, Balances, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, XcmPallet};
+use super::{
+    AccountId, Balances, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, XcmPallet, Balance,
+    TransactionByteFee,
+};
 
-use bp_westend::Westend;
-use bp_xcm_bridge_hub::{Bridge, BridgeId};
 use frame_support::{
     parameter_types,
     traits::{ConstU32, Everything, Nothing},
     weights::Weight,
 };
 use frame_system::EnsureRoot;
-use parachains_common::polkadot::fee::WeightToFee;
 // TODO: Check how to gather all and if we keep them
 use bridge_hub_westend_runtime::{
     xcm_config::{SafeCallFilter, WestendLocation},
@@ -34,20 +34,20 @@ use bridge_hub_westend_runtime::{
 };
 use parachains_common::impls::ToStakingPot;
 use westend_runtime::{xcm_config::ThisNetwork, AllPalletsWithSystem};
-use xcm::latest::prelude::*;
-use xcm::v3::{NetworkId::Rococo as RococoId, NetworkId::Westend as WestednId};
-use xcm_builder::{
+use staging_xcm::latest::prelude::*;
+use staging_xcm::v3::{InteriorMultiLocation, MultiLocation};
+use staging_xcm_builder::{
     Account32Hash, AccountId32Aliases, CurrencyAdapter as XcmCurrencyAdapter, IsConcrete,
     MintLocation, SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation,
     TakeWeightCredit, UsingComponents, WeightInfoBounds,
 };
-use xcm_executor::traits::{ExportXcm, WithOriginFilter};
+use staging_xcm_executor::traits::{WithOriginFilter};
 
 parameter_types! {
     /// The location of the `MLAU` token, from the context of this chain. Since this token is native to this
-    /// chain, we make it synonymous with it and thus it is the `Here` location, which means "equivalent to
+    /// chain, we make it synonymous with it, and thus it is the `Here` location, which means "equivalent to
     /// the context".
-    pub const TokenLocation: MultiLocation = Here.into_location();
+    pub const TokenLocation: Location = Here.into_location();
     /// Token asset identifier.
     pub TokenAssetId: AssetId = TokenLocation::get().into();
 
@@ -111,30 +111,57 @@ pub type Barrier = (
 );
 
 /// Dispatches received XCM messages from other chain.
-pub type OnMillauBlobDispatcher = xcm_builder::BridgeBlobDispatcher<
+pub type OnMillauBlobDispatcher = staging_xcm_builder::BridgeBlobDispatcher<
     crate::xcm_config::XcmRouter,
     crate::xcm_config::UniversalLocation,
     (),
 >;
 
+/// Handles converting a weight scalar to a fee value, based on the scale and granularity of the
+/// node's balance type.
+///
+/// This should typically create a mapping between the following ranges:
+///   - `[0, MAXIMUM_BLOCK_WEIGHT]`
+///   - `[Balance::min, Balance::max]`
+///
+/// Yet, it can be used for any other sort of change to weight-fee. Some examples being:
+///   - Setting it to `0` will essentially disable the weight fee.
+///   - Setting it to `1` will cause the literal `#[weight = x]` values to be charged.
+pub struct WeightToFee;
+
+impl frame_support::weights::WeightToFeePolynomial for WeightToFee {
+    type Balance = super::Balance;
+    fn polynomial() -> frame_support::weights::WeightToFeeCoefficients<Self::Balance> {
+        let p = super::currency::CENTS;
+        let q = 10 * super::Balance::from(frame_support::weights::constants::ExtrinsicBaseWeight::get().ref_time());
+        smallvec::smallvec![frame_support::weights::WeightToFeeCoefficient {
+            degree: 1,
+            negative: false,
+            coeff_frac: sp_runtime::Perbill::from_rational(p % q, q),
+            coeff_integer: p / q,
+        }]
+    }
+}
+
 /// XCM weigher type.
-pub type XcmWeigher = xcm_builder::FixedWeightBounds<BaseXcmWeight, RuntimeCall, MaxInstructions>;
+pub type XcmWeigher = staging_xcm_builder::FixedWeightBounds<BaseXcmWeight, RuntimeCall, MaxInstructions>;
 
 pub struct XcmConfig;
-impl xcm_executor::Config for XcmConfig {
+impl staging_xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
     type AssetTransactor = LocalAssetTransactor;
     type OriginConverter = LocalOriginConverter;
     type IsReserve = ();
     type IsTeleporter = ();
+    type Aliasers = Nothing;
     type UniversalLocation = UniversalLocation;
     type Barrier = Barrier;
-	type Weigher = xcm_builder::WeightInfoBounds<
-        collectives_westend_runtime::xcm_config::TempFixedXcmWeight,
-		RuntimeCall,
-		MaxInstructions,
-	>;
+    type Weigher = WeightInfoBounds<
+collectives_westend_runtime::xcm_config::TempFixedXcmWeight,
+        RuntimeCall,
+        MaxInstructions,
+    >;
     type Trader =
         UsingComponents<WeightToFee, WestendLocation, AccountId, Balances, ToStakingPot<Runtime>>;
     type ResponseHandler = PolkadotXcm;
@@ -151,7 +178,10 @@ impl xcm_executor::Config for XcmConfig {
     type UniversalAliases = Nothing;
     type CallDispatcher = WithOriginFilter<SafeCallFilter>;
     type SafeCallFilter = SafeCallFilter;
-    type Aliasers = Nothing;
+    type TransactionalProcessor = ();
+    type HrmpNewChannelOpenRequestHandler = ();
+    type HrmpChannelAcceptedHandler = ();
+    type HrmpChannelClosingHandler = ();
 }
 
 /// Type to convert an `Origin` type value into a `MultiLocation` value which represents an interior
@@ -168,16 +198,18 @@ parameter_types! {
 
 impl pallet_xcm::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type CurrencyMatcher = ();
     // We don't allow any messages to be sent via the transaction yet. This is basically safe to
     // enable, (safe the possibility of someone spamming the parachain if they're willing to pay
     // the DOT to send from the Relay-chain). But it's useless until we bring in XCM v3 which will
     // make `DescendOrigin` a bit more useful.
-    type SendXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
+    type SendXcmOrigin = staging_xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
     type XcmRouter = ();
     // Anyone can execute XCM messages locally.
-    type ExecuteXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
+    type ExecuteXcmOrigin = staging_xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
     type XcmExecuteFilter = Everything;
-    type XcmExecutor = xcm_executor::XcmExecutor<XcmConfig>;
+    type XcmExecutor = staging_xcm_executor::XcmExecutor<XcmConfig>;
     // Anyone is able to use teleportation regardless of who they are and what they want to
     // teleport.
     type XcmTeleportFilter = Everything;
@@ -190,17 +222,133 @@ impl pallet_xcm::Config for Runtime {
     type RuntimeCall = RuntimeCall;
     const VERSION_DISCOVERY_QUEUE_SIZE: u32 = 100;
     type AdvertisedXcmVersion = pallet_xcm::CurrentXcmVersion;
-    type Currency = Balances;
-    type CurrencyMatcher = ();
+    type AdminOrigin = EnsureRoot<AccountId>;
     type TrustedLockers = ();
     type SovereignAccountOf = SovereignAccountOf;
-    type MaxLockers = frame_support::traits::ConstU32<8>;
-    type WeightInfo = pallet_xcm::TestWeightInfo;
-    #[cfg(feature = "runtime-benchmarks")]
-    type ReachableDest = ReachableDest;
-    type AdminOrigin = EnsureRoot<AccountId>;
+    type MaxLockers = ConstU32<8>;
     type MaxRemoteLockConsumers = ConstU32<0>;
     type RemoteLockConsumerIdentifier = ();
+    type WeightInfo = pallet_xcm::TestWeightInfo;
 }
 
-// TODO: restore tests for new configs
+/// All configuration related to bridging
+pub mod bridging {
+    use super::*;
+    use assets_common::matching;
+    use sp_std::collections::btree_set::BTreeSet;
+    use staging_xcm_builder::NetworkExportTableItem;
+
+    // common/shared parameters
+    parameter_types! {
+		/// Base price of every byte of the Rococo -> Westend message. Can be adjusted via
+        /// governance `set_storage` call.
+        ///
+        /// Default value is our estimation of the:
+        ///
+        /// 1) an approximate cost of XCM execution (`ExportMessage` and surroundings) at Rococo bridge hub;
+        ///
+        /// 2) the approximate cost of Rococo -> Westend message delivery transaction on Westend Bridge Hub,
+        ///    converted into ROCs using 1:1 conversion rate;
+        ///
+        /// 3) the approximate cost of Rococo -> Westend message confirmation transaction on Rococo Bridge Hub.
+		pub storage XcmBridgeHubRouterBaseFee: Balance =
+			bp_bridge_hub_rococo::BridgeHubRococoBaseXcmFeeInRocs::get()
+				.saturating_add(bp_bridge_hub_westend::BridgeHubWestendBaseDeliveryFeeInWnds::get())
+				.saturating_add(bp_bridge_hub_rococo::BridgeHubRococoBaseConfirmationFeeInRocs::get());
+		/// Price of every byte of the Rococo -> Westend message. Can be adjusted via
+        /// governance `set_storage` call.
+		pub storage XcmBridgeHubRouterByteFee: Balance = TransactionByteFee::get();
+
+		pub SiblingBridgeHubParaId: u32 = bp_bridge_hub_rococo::BRIDGE_HUB_ROCOCO_PARACHAIN_ID;
+		pub SiblingBridgeHub: Location = Location::new(1, [Parachain(SiblingBridgeHubParaId::get())]);
+		/// Router expects payment with this `AssetId`.
+        /// (`AssetId` has to be aligned with `BridgeTable`)
+		pub XcmBridgeHubRouterFeeAssetId: AssetId = TokenLocation::get().into();
+
+		pub BridgeTable: sp_std::vec::Vec<NetworkExportTableItem> =
+			sp_std::vec::Vec::new().into_iter()
+			.chain(to_westend::BridgeTable::get())
+			.collect();
+	}
+
+    pub type NetworkExportTable = staging_xcm_builder::NetworkExportTable<BridgeTable>;
+
+    pub mod to_westend {
+        use frame_support::traits::Contains;
+        use staging_xcm_builder::NetworkExportTableItem;
+        use crate::XcmBridgeHubRouter;
+        use super::*;
+
+        parameter_types! {
+			pub SiblingBridgeHubWithBridgeHubWestendInstance: Location = Location::new(
+				1,
+				[
+					Parachain(SiblingBridgeHubParaId::get()),
+					PalletInstance(bp_bridge_hub_rococo::WITH_BRIDGE_ROCOCO_TO_WESTEND_MESSAGES_PALLET_INDEX)
+				]
+			);
+
+			pub const WestendNetwork: NetworkId = NetworkId::Westend;
+			pub AssetHubWestend: Location = Location::new(2, [GlobalConsensus(WestendNetwork::get()), Parachain(bp_asset_hub_westend::ASSET_HUB_WESTEND_PARACHAIN_ID)]);
+			pub WndLocation: Location = Location::new(2, [GlobalConsensus(WestendNetwork::get())]);
+
+			pub WndFromAssetHubWestend: (AssetFilter, Location) = (
+				Wild(AllOf { fun: WildFungible, id: AssetId(WndLocation::get()) }),
+				AssetHubWestend::get()
+			);
+
+			/// Set up exporters' configuration.
+            /// `Option<Asset>` represents static "base fee" which is used for total delivery fee calculation.
+			pub BridgeTable: sp_std::vec::Vec<NetworkExportTableItem> = sp_std::vec![
+				NetworkExportTableItem::new(
+					WestendNetwork::get(),
+					Some(sp_std::vec![
+						AssetHubWestend::get().interior.split_global().expect("invalid configuration for AssetHubWestend").1,
+					]),
+					SiblingBridgeHub::get(),
+					// base delivery fee to local `BridgeHub`
+					Some((
+						XcmBridgeHubRouterFeeAssetId::get(),
+						XcmBridgeHubRouterBaseFee::get(),
+					).into())
+				)
+			];
+
+			/// Universal aliases
+			pub UniversalAliases: BTreeSet<(Location, Junction)> = BTreeSet::from_iter(
+				sp_std::vec![
+					(SiblingBridgeHubWithBridgeHubWestendInstance::get(), GlobalConsensus(WestendNetwork::get()))
+				]
+			);
+		}
+
+        impl Contains<(Location, Junction)> for UniversalAliases {
+            fn contains(alias: &(Location, Junction)) -> bool {
+                UniversalAliases::get().contains(alias)
+            }
+        }
+
+        /// Trusted reserve locations filter for `xcm_executor::Config::IsReserve`.
+        /// Locations from which the runtime accepts reserved assets.
+        pub type IsTrustedBridgedReserveLocationForConcreteAsset =
+        matching::IsTrustedBridgedReserveLocationForConcreteAsset<
+            UniversalLocation,
+            (
+                // allow to receive WND from AssetHubWestend
+                staging_xcm_builder::Case<WndFromAssetHubWestend>,
+                // and nothing else
+            ),
+        >;
+
+        impl Contains<RuntimeCall> for XcmBridgeHubRouter {
+            fn contains(call: &RuntimeCall) -> bool {
+                matches!(
+					call,
+					RuntimeCall::XcmBridgeHubRouter(
+						pallet_xcm_bridge_hub_router::Call::report_bridge_status { .. }
+					)
+				)
+            }
+        }
+    }
+}
