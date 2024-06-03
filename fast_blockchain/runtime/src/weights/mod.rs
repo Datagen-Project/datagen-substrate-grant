@@ -14,6 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Bridges Common.  If not, see <http://www.gnu.org/licenses/>.
 
-mod pallet_bridge_messages_messages_bench_runtime_with_rococo_messages_instance;
+mod pallet_bridge_messages;
 
-pub use pallet_bridge_messages_messages_bench_runtime_with_rococo_messages_instance::WeightInfo as RococoMessagesWeightInfo;
+use ::pallet_bridge_messages::WeightInfoExt as MessagesWeightInfoExt;
+use frame_support::weights::Weight;
+use ::pallet_bridge_relayers::WeightInfoExt as _;
+
+impl MessagesWeightInfoExt for pallet_bridge_messages::WeightInfo<crate::Runtime> {
+    fn expected_extra_storage_proof_size() -> u32 {
+        bp_bridge_hub_rococo::EXTRA_STORAGE_PROOF_SIZE
+    }
+
+    fn receive_messages_proof_overhead_from_runtime() -> Weight {
+        pallet_bridge_relayers::WeightInfo::receive_messages_proof_overhead_from_runtime(
+        )
+    }
+
+    fn receive_messages_delivery_proof_overhead_from_runtime() -> Weight {
+        pallet_bridge_relayers::WeightInfo::receive_messages_delivery_proof_overhead_from_runtime()
+    }
+}
