@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use frame_support::traits::Randomness;
 use scale_info::prelude::vec::Vec;
 pub use pallet::*;
