@@ -9,6 +9,7 @@ use frame_system::Config as SystemConfig;
 pub use pallet::*;
 use sp_runtime::traits::Saturating;
 use sp_std::{prelude::*, vec};
+use staging_xcm as xcm;
 use xcm::latest::prelude::*;
 
 parameter_types! {
@@ -74,7 +75,7 @@ pub mod pallet {
 			seq: u32,
 			payload: Vec<u8>,
 			hash: XcmHash,
-			cost: MultiAssets,
+			cost: Assets,
 		},
 		XcmRecieved {
 			para: ParaId,
@@ -86,7 +87,7 @@ pub mod pallet {
 			seq: u32,
 			payload: Vec<u8>,
 			hash: XcmHash,
-			cost: MultiAssets,
+			cost: Assets,
 		},
 		ErrorSendingXcmAck {
 			e: SendError,
