@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Bridges Common.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Rialto parachain runtime. This can be compiled with `#[no_std]`, ready for Wasm.
+//! The Rococo parachain runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 //!
 //! Originally a copy of runtime from <https://github.com/substrate-developer-hub/substrate-parachain-template>.
 
@@ -27,7 +27,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use bridge_runtime_common::generate_bridge_reject_obsolete_headers_and_messages;
-use codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use cumulus_pallet_parachain_system::AnyRelayNumber;
 use scale_info::TypeInfo;
 use sp_api::impl_runtime_apis;
@@ -47,6 +47,7 @@ use sp_version::RuntimeVersion;
 // A few exports that help ease life for downstream crates.
 use bp_runtime::HeaderId;
 pub use frame_support::{
+	derive_impl,
 	construct_runtime,
 	dispatch::DispatchClass,
 	match_types, parameter_types,
@@ -59,7 +60,11 @@ pub use frame_support::{
 	},
 	StorageValue,
 };
-pub use frame_system::{Call as SystemCall, EnsureRoot};
+pub use frame_system::{
+	Call as SystemCall,
+	limits::{BlockWeights, BlockLength},
+	EnsureRoot
+};
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_sudo::Call as SudoCall;
 pub use pallet_timestamp::Call as TimestampCall;
@@ -68,9 +73,9 @@ pub use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{MultiAddress, Perbill, Permill};
 
-pub use bp_rialto_parachain::{
-	AccountId, Balance, BlockLength, BlockNumber, BlockWeights, Hash, Hasher as Hashing, Header,
-	Nonce, Signature, MAXIMUM_BLOCK_WEIGHT,
+pub use parachains_common::{
+	AccountId, Balance, BlockNumber, Hash, Header, Nonce, Signature, MAXIMUM_BLOCK_WEIGHT,
+	NORMAL_DISPATCH_RATIO, AVERAGE_ON_INITIALIZE_RATIO,
 };
 
 pub use pallet_bridge_grandpa::Call as BridgeGrandpaCall;
@@ -78,9 +83,11 @@ pub use pallet_bridge_messages::Call as MessagesCall;
 pub use pallet_xcm::Call as XcmCall;
 
 // Polkadot & XCM imports
-use bridge_runtime_common::CustomNetworkId;
 use pallet_xcm::XcmPassthrough;
 use polkadot_parachain_primitives::primitives::Sibling;
+use staging_xcm as xcm;
+use staging_xcm_builder as xcm_builder;
+use staging_xcm_executor as xcm_executor;
 use xcm::latest::prelude::*;
 use xcm_builder::{
 	Account32Hash, AccountId32Aliases, CurrencyAdapter, EnsureXcmOrigin, FixedWeightBounds,
@@ -89,46 +96,10 @@ use xcm_builder::{
 	SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit, UsingComponents,
 };
 use xcm_executor::{Config, XcmExecutor};
+pub use crate::xcm_config::XcmRouter;
 
 pub mod westend_messages;
-
-// generate signed extension that rejects obsolete bridge transactions
-generate_bridge_reject_obsolete_headers_and_messages! {
-	RuntimeCall, AccountId,
-	// Grandpa
-	BridgeMillauGrandpa,
-	// Messages
-	BridgeMillauMessages
-}
-
-/// Dummy signed extension that does nothing.
-///
-/// We're using it to have the same set of signed extensions on all parachains with bridge pallets
-/// deployed (bridge hubs and rialto parachain).
-#[derive(Encode, Decode, Debug, PartialEq, Eq, Clone, TypeInfo)]
-pub struct DummyBridgeRefundMillauMessages;
-
-impl SignedExtension for DummyBridgeRefundMillauMessages {
-	const IDENTIFIER: &'static str = "DummyBridgeRefundMillauMessages";
-	type AccountId = AccountId;
-	type Call = RuntimeCall;
-	type AdditionalSigned = ();
-	type Pre = ();
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(())
-	}
-
-	fn pre_dispatch(
-		self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> Result<Self::Pre, TransactionValidityError> {
-		Ok(())
-	}
-}
+mod xcm_config;
 
 /// The address format for describing accounts.
 pub type Address = MultiAddress<AccountId, ()>;
@@ -148,8 +119,6 @@ pub type SignedExtra = (
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-	BridgeRejectObsoleteHeadersAndMessages,
-	DummyBridgeRefundMillauMessages,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
@@ -174,14 +143,14 @@ impl_opaque_keys! {
 /// This runtime version.
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("template-parachain"),
-	impl_name: create_runtime_str!("template-parachain"),
+	spec_name: create_runtime_str!("rococo-parachain"),
+	impl_name: create_runtime_str!("rococo-parachain"),
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
-	state_version: 0,
+	state_version: 1,
 };
 
 /// This determines the average expected block time that we are targeting.
@@ -219,55 +188,52 @@ parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const Version: RuntimeVersion = VERSION;
 	pub const SS58Prefix: u8 = 48;
+
+	pub RuntimeBlockLength: BlockLength =
+		BlockLength::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
+	pub RuntimeBlockWeights: BlockWeights = BlockWeights::builder()
+		.base_block(BlockExecutionWeight::get())
+		.for_class(DispatchClass::all(), |weights| {
+			weights.base_extrinsic = ExtrinsicBaseWeight::get();
+		})
+		.for_class(DispatchClass::Normal, |weights| {
+			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT);
+		})
+		.for_class(DispatchClass::Operational, |weights| {
+			weights.max_total = Some(MAXIMUM_BLOCK_WEIGHT);
+			// Operational transactions have some extra reserved space, so that they
+			// are included even if block reached `MAXIMUM_BLOCK_WEIGHT`.
+			weights.reserved = Some(
+				MAXIMUM_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT
+			);
+		})
+		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
+		.build_or_panic();
+}
+
+pub struct IsIdentityCall;
+impl frame_support::traits::Contains<RuntimeCall> for IsIdentityCall {
+	fn contains(c: &RuntimeCall) -> bool {
+		matches!(c, RuntimeCall::Identity(_))
+	}
 }
 
 // Configure FRAME pallets to include in runtime.
 
+#[derive_impl(frame_system::config_preludes::RelayChainDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Runtime {
-	/// The identifier used to distinguish between accounts.
-	type AccountId = AccountId;
-	/// The aggregated dispatch type that is available for extrinsics.
-	type RuntimeCall = RuntimeCall;
-	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
-	type Lookup = AccountIdLookup<AccountId, ()>;
-	/// The index type for storing how many extrinsics an account has signed.
+	type BaseCallFilter = frame_support::traits::EverythingBut<IsIdentityCall> ;
+	type BlockWeights = RuntimeBlockWeights;
+	type BlockLength = RuntimeBlockLength;
 	type Nonce = Nonce;
-	/// The type for hashing blocks and tries.
 	type Hash = Hash;
-	/// The hashing algorithm used.
-	type Hashing = Hashing;
-	/// The header type.
+	type AccountId = AccountId;
 	type Block = Block;
-	/// The ubiquitous event type.
-	type RuntimeEvent = RuntimeEvent;
-	/// The ubiquitous origin type.
-	type RuntimeOrigin = RuntimeOrigin;
-	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
-	type BlockHashCount = BlockHashCount;
-	/// Runtime version.
-	type Version = Version;
-	/// Converts a module to an index of this module in the runtime.
-	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<Balance>;
-	/// What to do if a new account is created.
-	type OnNewAccount = ();
-	/// What to do if an account is fully reaped from the system.
-	type OnKilledAccount = ();
-	/// The weight of database operations that the runtime can invoke.
-	type DbWeight = ();
-	/// The basic call filter to use in dispatchable.
-	type BaseCallFilter = Everything;
-	/// Weight information for the extrinsics of this pallet.
-	type SystemWeightInfo = ();
-	/// Block & extrinsics weights: base values and limits.
-	type BlockWeights = BlockWeights;
-	/// The maximum length of a block (in bytes).
-	type BlockLength = BlockLength;
-	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
-	type SS58Prefix = SS58Prefix;
-	/// The action to take on a Runtime Upgrade
+	type SystemWeightInfo = frame_system::weights::SubstrateWeight<Runtime>;
+	type SS58Prefix = frame_support::traits::ConstU16<42>;
 	type OnSetCode = cumulus_pallet_parachain_system::ParachainSetCode<Self>;
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 parameter_types! {
@@ -279,7 +245,7 @@ impl pallet_timestamp::Config for Runtime {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
-	type WeightInfo = ();
+	type WeightInfo = pallet_timestamp::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -291,35 +257,37 @@ parameter_types! {
 }
 
 impl pallet_balances::Config for Runtime {
-	/// The type for recording an account's balance.
-	type Balance = Balance;
 	/// The ubiquitous event type.
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type RuntimeFreezeReason = RuntimeFreezeReason;
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
+	/// The type for recording an account's balance.
+	type Balance = Balance;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
-	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
+	type ReserveIdentifier = [u8; 8];
+	type FreezeIdentifier = ();
 	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ConstU32<50>;
-	type ReserveIdentifier = [u8; 8];
-	type RuntimeHoldReason = RuntimeHoldReason;
-	type FreezeIdentifier = ();
-	type MaxHolds = ConstU32<0>;
-	type MaxFreezes = ConstU32<0>;
+	type MaxFreezes = ConstU32<1>;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
-	type OnChargeTransaction = pallet_transaction_payment::CurrencyAdapter<Balances, ()>;
-	type OperationalFeeMultiplier = OperationalFeeMultiplier;
+	type RuntimeEvent = RuntimeEvent;
+	type OnChargeTransaction = pallet_transaction_payment::CurrencyAdapter<
+		Balances, polkadot_runtime_common::ToAuthor<Runtime>
+	>;
 	type WeightToFee = IdentityFee<Balance>;
 	type LengthToFee = IdentityFee<Balance>;
-	type FeeMultiplierUpdate = ();
-	type RuntimeEvent = RuntimeEvent;
+	type FeeMultiplierUpdate = polkadot_runtime_common::SlowAdjustingFeeUpdate<Self>;
+	type OperationalFeeMultiplier = OperationalFeeMultiplier;
 }
 
 impl pallet_sudo::Config for Runtime {
-	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type WeightInfo = pallet_sudo::weights::SubstrateWeight<Runtime>;
 }
 
@@ -331,177 +299,20 @@ parameter_types! {
 impl cumulus_pallet_parachain_system::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type OnSystemEvent = ();
-	type SelfParaId = parachain_info::Pallet<Runtime>;
+	type SelfParaId = staging_parachain_info::Pallet<Runtime>;
 	type OutboundXcmpMessageSource = XcmpQueue;
-	type DmpMessageHandler = DmpQueue;
+	type DmpQueue = ();
 	type ReservedDmpWeight = ReservedDmpWeight;
 	type XcmpMessageHandler = XcmpQueue;
 	type ReservedXcmpWeight = ReservedXcmpWeight;
 	type CheckAssociatedRelayNumber = AnyRelayNumber;
+	type WeightInfo = ();
+	type ConsensusHook = ();
 }
 
-impl parachain_info::Config for Runtime {}
+impl staging_parachain_info::Config for Runtime {}
 
 impl cumulus_pallet_aura_ext::Config for Runtime {}
-
-parameter_types! {
-	pub const RelayLocation: MultiLocation = MultiLocation::parent();
-	pub const RelayNetwork: NetworkId = CustomNetworkId::Rialto.as_network_id();
-	pub RelayOrigin: RuntimeOrigin = cumulus_pallet_xcm::Origin::Relay.into();
-	pub UniversalLocation: InteriorMultiLocation = ThisNetwork::get().into();
-	/// The Millau network ID.
-	pub const MillauNetwork: NetworkId = CustomNetworkId::Millau.as_network_id();
-	/// The RialtoParachain network ID.
-	pub const ThisNetwork: NetworkId = CustomNetworkId::RialtoParachain.as_network_id();
-}
-
-/// Type for specifying how a `MultiLocation` can be converted into an `AccountId`. This is used
-/// when determining ownership of accounts for asset transacting and when attempting to use XCM
-/// `Transact` in order to determine the dispatch Origin.
-pub type LocationToAccountId = (
-	// The parent (Relay-chain) origin converts to the default `AccountId`.
-	ParentIsPreset<AccountId>,
-	// Sibling parachain origins convert to AccountId via the `ParaId::into`.
-	SiblingParachainConvertsVia<Sibling, AccountId>,
-	// Straight up local `AccountId32` origins just alias directly to `AccountId`.
-	AccountId32Aliases<RelayNetwork, AccountId>,
-	// Dummy stuff for our tests.
-	Account32Hash<ThisNetwork, AccountId>,
-);
-
-/// Means for transacting assets on this chain.
-pub type LocalAssetTransactor = CurrencyAdapter<
-	// Use this currency:
-	Balances,
-	// Use this currency when it is a fungible asset matching the given location or name:
-	IsConcrete<RelayLocation>,
-	// Do a simple punn to convert an AccountId32 MultiLocation into a native chain account ID:
-	LocationToAccountId,
-	// Our chain's account ID type (we can't get away without mentioning it explicitly):
-	AccountId,
-	// We don't track any teleports.
-	(),
->;
-
-/// This is the type we use to convert an (incoming) XCM origin into a local `Origin` instance,
-/// ready for dispatching a transaction with XCM `Transact`. There is an `OriginKind` which can
-/// biases the kind of local `Origin` it will become.
-pub type XcmOriginToTransactDispatchOrigin = (
-	// Sovereign account converter; this attempts to derive an `AccountId` from the origin location
-	// using `LocationToAccountId` and then turn that into the usual `Signed` origin. Useful for
-	// foreign chains who want to have a local sovereign account on this chain which they control.
-	SovereignSignedViaLocation<LocationToAccountId, RuntimeOrigin>,
-	// Native converter for Relay-chain (Parent) location; will convert to a `Relay` origin when
-	// recognised.
-	RelayChainAsNative<RelayOrigin, RuntimeOrigin>,
-	// Native converter for sibling Parachains; will convert to a `SiblingPara` origin when
-	// recognised.
-	SiblingParachainAsNative<cumulus_pallet_xcm::Origin, RuntimeOrigin>,
-	// Superuser converter for the Relay-chain (Parent) location. This will allow it to issue a
-	// transaction from the Root origin.
-	ParentAsSuperuser<RuntimeOrigin>,
-	// Native signed account converter; this just converts an `AccountId32` origin into a normal
-	// `Origin::Signed` origin of the same 32-byte value.
-	SignedAccountId32AsNative<RelayNetwork, RuntimeOrigin>,
-	// Xcm origins can be represented natively under the Xcm pallet's Xcm origin.
-	XcmPassthrough<RuntimeOrigin>,
-);
-
-// TODO: until https://github.com/paritytech/parity-bridges-common/issues/1417 is fixed (in either way),
-// the following constant must match the similar constant in the Millau runtime.
-
-parameter_types! {
-	/// The amount of weight an XCM operation takes. We don't care much about those values as we're on testnet.
-	pub const UnitWeightCost: Weight = Weight::from_parts(1_000_000, 1024);
-	// One UNIT buys 1 second of weight.
-	pub const WeightPrice: (MultiLocation, u128) = (MultiLocation::parent(), UNIT);
-	pub const MaxInstructions: u32 = 100;
-	pub const MaxAuthorities: u32 = 100_000;
-	pub MaxAssetsIntoHolding: u32 = 64;
-}
-
-match_types! {
-	pub type ParentOrParentsUnitPlurality: impl Contains<MultiLocation> = {
-		MultiLocation { parents: 1, interior: Here } |
-		MultiLocation { parents: 1, interior: X1(Plurality { id: BodyId::Unit, .. }) }
-	};
-}
-
-pub type Barrier = TakeWeightCredit;
-
-/// Dispatches received XCM messages from other chain.
-pub type OnRialtoParachainBlobDispatcher =
-	xcm_builder::BridgeBlobDispatcher<XcmRouter, UniversalLocation, ()>;
-
-/// XCM weigher type.
-pub type XcmWeigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
-
-pub struct XcmConfig;
-impl Config for XcmConfig {
-	type RuntimeCall = RuntimeCall;
-	type XcmSender = ();
-	type AssetTransactor = LocalAssetTransactor;
-	type OriginConverter = XcmOriginToTransactDispatchOrigin;
-	type IsReserve = NativeAsset;
-	type IsTeleporter = NativeAsset; // <- should be enough to allow teleportation of UNIT
-	type UniversalLocation = UniversalLocation;
-	type Barrier = Barrier;
-	type Weigher = XcmWeigher;
-	type Trader = UsingComponents<IdentityFee<Balance>, RelayLocation, AccountId, Balances, ()>;
-	type ResponseHandler = PolkadotXcm;
-	type AssetTrap = PolkadotXcm;
-	type AssetClaims = PolkadotXcm;
-	type SubscriptionService = PolkadotXcm;
-	type PalletInstancesInfo = ();
-	type MaxAssetsIntoHolding = MaxAssetsIntoHolding;
-	type AssetLocker = ();
-	type AssetExchanger = ();
-	type FeeManager = ();
-	type MessageExporter = XcmMillauBridgeHub;
-	type UniversalAliases = Nothing;
-	type CallDispatcher = RuntimeCall;
-	type SafeCallFilter = Everything;
-	type Aliasers = Nothing;
-}
-
-/// No local origins on this chain are allowed to dispatch XCM sends/executions.
-pub type LocalOriginToLocation = SignedToAccountId32<RuntimeOrigin, AccountId, RelayNetwork>;
-
-/// The XCM router. We are not sending messages to sibling/parent/child chains here.
-pub type XcmRouter = ();
-
-#[cfg(feature = "runtime-benchmarks")]
-parameter_types! {
-	pub ReachableDest: Option<MultiLocation> = None;
-}
-
-impl pallet_xcm::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type SendXcmOrigin = EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
-	type XcmRouter = XcmRouter;
-	type ExecuteXcmOrigin = EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
-	type XcmExecuteFilter = Everything;
-	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type XcmTeleportFilter = Everything;
-	type XcmReserveTransferFilter = Everything;
-	type Weigher = XcmWeigher;
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
-	const VERSION_DISCOVERY_QUEUE_SIZE: u32 = 100;
-	type AdvertisedXcmVersion = pallet_xcm::CurrentXcmVersion;
-	type Currency = Balances;
-	type CurrencyMatcher = ();
-	type TrustedLockers = ();
-	type SovereignAccountOf = ();
-	type MaxLockers = frame_support::traits::ConstU32<8>;
-	type UniversalLocation = UniversalLocation;
-	type WeightInfo = pallet_xcm::TestWeightInfo;
-	#[cfg(feature = "runtime-benchmarks")]
-	type ReachableDest = ReachableDest;
-	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
-	type MaxRemoteLockConsumers = ConstU32<0>;
-	type RemoteLockConsumerIdentifier = ();
-}
 
 impl cumulus_pallet_xcm::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -510,27 +321,28 @@ impl cumulus_pallet_xcm::Config for Runtime {
 
 impl cumulus_pallet_xcmp_queue::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type XcmExecutor = XcmExecutor<XcmConfig>;
 	type ChannelInfo = ParachainSystem;
 	type VersionWrapper = ();
-	type ExecuteOverweightOrigin = EnsureRoot<AccountId>;
+	type XcmpQueue = ();
+	type MaxInboundSuspended = ();
 	type ControllerOrigin = EnsureRoot<AccountId>;
 	type ControllerOriginConverter = XcmOriginToTransactDispatchOrigin;
-	type WeightInfo = ();
 	type PriceForSiblingDelivery = ();
+	type WeightInfo = ();
 }
 
 impl cumulus_pallet_dmp_queue::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type ExecuteOverweightOrigin = frame_system::EnsureRoot<AccountId>;
+	type DmpSink = ();
+	type WeightInfo = ();
 }
 
 impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
+	type MaxAuthorities = frame_support::traits::ConstU16<50>;
 	type DisabledValidators = ();
-	type MaxAuthorities = MaxAuthorities;
 	type AllowMultipleBlocksPerSlot = ConstBool<false>;
+	type SlotDuration = ();
 }
 
 impl pallet_bridge_relayers::Config for Runtime {
@@ -539,11 +351,11 @@ impl pallet_bridge_relayers::Config for Runtime {
 	type PaymentProcedure =
 		bp_relayers::PayRewardFromAccount<pallet_balances::Pallet<Runtime>, AccountId>;
 	type StakeAndSlash = ();
-	type WeightInfo = ();
+	type WeightInfo = pallet_bridge_relayers::weights::BridgeWeight<Runtime>;
 }
 
-pub type WestendGrandpaInstance = ();
-impl pallet_bridge_grandpa::Config for Runtime {
+pub type WestendGrandpaInstance = pallet_bridge_grandpa::Instance3;
+impl pallet_bridge_grandpa::Config<WestendGrandpaInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BridgedChain = bp_westend::Westend;
 	type MaxFreeMandatoryHeadersPerBlock = ConstU32<4>;
@@ -551,55 +363,35 @@ impl pallet_bridge_grandpa::Config for Runtime {
 	type WeightInfo = pallet_bridge_grandpa::weights::BridgeWeight<Runtime>;
 }
 
+/// Add GRANDPA bridge pallet to track Rococo Bulletin chain.
+pub type BridgeGrandpaRococoBulletinInstance = pallet_bridge_grandpa::Instance4;
+impl pallet_bridge_grandpa::Config<BridgeGrandpaRococoBulletinInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type BridgedChain = bp_polkadot_bulletin::PolkadotBulletin;
+	type MaxFreeMandatoryHeadersPerBlock = ConstU32<4>;
+	type HeadersToKeep = ConstU32<1024>;
+	type WeightInfo = pallet_bridge_grandpa::weights::BridgeWeight<Runtime>;
+}
+
+pub type BridgeParachainWestendInstance = pallet_bridge_parachains::Instance3;
+impl pallet_bridge_parachains::Config<BridgeParachainWestendInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_bridge_parachains::weights::BridgeWeight<Runtime>;
+	type BridgesGrandpaPalletInstance = WestendGrandpaInstance;
+	type ParasPalletName = WestendBridgeParachainPalletName;
+	type ParaStoredHeaderDataBuilder =
+		bp_parachains::SingleParaStoredHeaderDataBuilder<bp_bridge_hub_westend::BridgeHubWestend>;
+	type HeadsToKeep = ConstU32<32>;
+	type MaxParaHeadDataSize = ConstU32<bp_westend::MAX_NESTED_PARACHAIN_HEAD_DATA_SIZE>;
+}
+
 parameter_types! {
 	pub const MaxMessagesToPruneAtOnce: bp_messages::MessageNonce = 8;
 	pub const RootAccountForPayments: Option<AccountId> = None;
-}
 
-/// Instance of the messages pallet used to relay messages to/from Westend chain.
-pub type WithBridgeHubWestendMessagesInstance = pallet_bridge_messages::Instance3;
+	pub const WestendBridgeParachainPalletName: &'static str = bp_westend::PARAS_PALLET_NAME;
 
-impl pallet_bridge_messages::Config<WithBridgeHubWestendMessagesInstance> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = bridge_hub_rococo_runtime::weights::pallet_bridge_messages::WeightInfo<Runtime>;
-	type BridgedChainId = BridgeHubWestendChainId;
-	type ThisChain = bp_rialto_parachain::RialtoParachain;
-	type BridgedChain = bp_westend::Westend;
-	type BridgedHeaderChain = BridgeWestendGrandpa;
-
-	type OutboundPayload = bp_xcm_bridge_hub::XcmAsPlainPayload;
-	type InboundPayload = bp_xcm_bridge_hub::XcmAsPlainPayload;
-
-	type DeliveryPayments = ();
-	type DeliveryConfirmationPayments = pallet_bridge_relayers::DeliveryConfirmationPaymentsAdapter<
-		Runtime,
-		WithWestendMessagesInstance,
-		frame_support::traits::ConstU128<100_000>,
-	>;
-	type OnMessagesDelivered = OnMessagesDeliveredFromWestend;
-
-	type MessageDispatch = XcmMillauBridgeHub;
-}
-
-/// Instance of the XCM bridge hub pallet used to relay messages to/from Millau chain.
-pub type WithMillauXcmBridgeHubInstance = ();
-
-impl pallet_xcm_bridge_hub::Config<WithMillauXcmBridgeHubInstance> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-
-	type UniversalLocation = UniversalLocation;
-	type BridgedNetworkId = MillauNetwork;
-	type BridgeMessagesPalletInstance = WithMillauMessagesInstance;
-
-	type OpenBridgeOrigin = frame_support::traits::NeverEnsureOrigin<xcm::latest::MultiLocation>;
-	type BridgeOriginAccountIdConverter = LocationToAccountId;
-
-	type BridgeReserve = ConstU128<1_000_000_000>;
-	type NativeCurrency = Balances;
-
-	type LocalXcmChannelManager = ();
-	type BlobDispatcher = OnRialtoParachainBlobDispatcher;
-	type MessageExportPrice = ();
+	pub const BridgeHubWestendChainId: bp_runtime::ChainId =
 }
 
 impl pallet_xcm_handler::Config for Runtime {
@@ -616,40 +408,83 @@ impl pallet_random_node_selector::Config for Runtime {
 	type Randomness = RandomnessCollectiveFlip;
 }
 
-// Create the runtime by composing the FRAME pallets that were previously configured.
-construct_runtime!(
-	pub enum Runtime {
-		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Sudo: pallet_sudo::{Pallet, Call, Storage, Config<T>, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
-		RandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip = 4,
+#[frame_support::runtime]
+mod runtime {
+	#[runtime::runtime]
+	#[runtime::derive(
+		RuntimeCall,
+		RuntimeEvent,
+		RuntimeError,
+		RuntimeOrigin,
+		RuntimeFreezeReason,
+		RuntimeHoldReason,
+		RuntimeSlashReason,
+		RuntimeLockId,
+		RuntimeTask
+	)]
+	pub struct Runtime;
 
-		ParachainSystem: cumulus_pallet_parachain_system::{Pallet, Call, Storage, Inherent, Event<T>} = 20,
-		ParachainInfo: parachain_info::{Pallet, Storage, Config<T>} = 21,
+	#[runtime::pallet_index(0)]
+	pub type System = frame_system;
 
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>} = 30,
+	#[runtime::pallet_index(1)]
+	pub type Timestamp = pallet_timestamp;
 
-		Aura: pallet_aura::{Pallet, Config<T>},
-		AuraExt: cumulus_pallet_aura_ext::{Pallet, Config<T>},
+	#[runtime::pallet_index(2)]
+	pub type Balances = pallet_balances;
 
-		// XCM helpers.
-		XcmpQueue: cumulus_pallet_xcmp_queue::{Pallet, Call, Storage, Event<T>} = 50,
-		PolkadotXcm: pallet_xcm::{Pallet, Call, Event<T>, Origin} = 51,
-		CumulusXcm: cumulus_pallet_xcm::{Pallet, Call, Event<T>, Origin} = 52,
-		DmpQueue: cumulus_pallet_dmp_queue::{Pallet, Call, Storage, Event<T>} = 53,
+	#[runtime::pallet_index(3)]
+	pub type TransactionPayment = pallet_transaction_payment;
 
-		// local pallets
-		XcmHandler: pallet_xcm_handler = 54,
-		RandomNodeSelector: pallet_random_node_selector = 56,
+	#[runtime::pallet_index(4)]
+	pub type Sudo = pallet_sudo;
 
-		// Millau bridge modules.
-		BridgeRelayers: pallet_bridge_relayers::{Pallet, Call, Storage, Event<T>},
-		BridgeMillauGrandpa: pallet_bridge_grandpa::{Pallet, Call, Storage, Event<T>},
-		BridgeMillauMessages: pallet_bridge_messages::{Pallet, Call, Storage, Event<T>, Config<T>},
-		XcmMillauBridgeHub: pallet_xcm_bridge_hub::{Pallet, Call, Storage, Event<T>, Config<T>},
-	}
-);
+	#[runtime::pallet_index(5)]
+	pub type Aura = pallet_aura;
+
+	#[runtime::pallet_index(6)]
+	pub type AuraExt = cumulus_pallet_aura_ext;
+
+	#[runtime::pallet_index(7)]
+	pub type ParachainSystem = cumulus_pallet_parachain_system;
+
+	#[runtime::pallet_index(8)]
+	pub type ParachainInfo = staging_parachain_info;
+
+	#[runtime::pallet_index(9)]
+	pub type RandomnessCollectiveFlip = pallet_insecure_randomness_collective_flip;
+
+	#[runtime::pallet_index(10)]
+	pub type XcmpQueue = cumulus_pallet_xcmp_queue;
+
+	#[runtime::pallet_index(11)]
+	pub type PolkadotXcm = pallet_xcm;
+
+	#[runtime::pallet_index(12)]
+	pub type CumulusXcm = cumulus_pallet_xcm;
+
+	#[runtime::pallet_index(13)]
+	pub type DmpQueue = cumulus_pallet_dmp_queue;
+
+	#[runtime::pallet_index(14)]
+	pub type XcmHandler = pallet_xcm_handler;
+
+	#[runtime::pallet_index(15)]
+	pub type RandomNodeSelector = pallet_random_node_selector;
+
+	#[runtime::pallet_index(16)]
+	pub type BridgeRelayers = pallet_bridge_relayers;
+
+	#[runtime::pallet_index(17)]
+	pub type BridgeWestendGrandpa = pallet_bridge_grandpa;
+
+	#[runtime::pallet_index(18)]
+	pub type BridgeWestendMessages = pallet_bridge_messages;
+
+	#[runtime::pallet_index(19)]
+	pub type XcmOverBridgeHubWestend = pallet_xcm_bridge_hub;
+
+}
 
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
@@ -774,41 +609,6 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl bp_millau::MillauFinalityApi<Block> for Runtime {
-		fn best_finalized() -> Option<HeaderId<bp_millau::Hash, bp_millau::BlockNumber>> {
-			BridgeMillauGrandpa::best_finalized()
-		}
-
-		fn synced_headers_grandpa_info(
-		) -> Vec<bp_header_chain::StoredHeaderGrandpaInfo<bp_millau::Header>> {
-			BridgeMillauGrandpa::synced_headers_grandpa_info()
-		}
-	}
-
-	impl bp_millau::ToMillauOutboundLaneApi<Block> for Runtime {
-		fn message_details(
-			lane: bp_messages::LaneId,
-			begin: bp_messages::MessageNonce,
-			end: bp_messages::MessageNonce,
-		) -> Vec<bp_messages::OutboundMessageDetails> {
-			bridge_runtime_common::messages_api::outbound_message_details::<
-				Runtime,
-				WithMillauMessagesInstance,
-			>(lane, begin, end)
-		}
-	}
-
-	impl bp_millau::FromMillauInboundLaneApi<Block> for Runtime {
-		fn message_details(
-			lane: bp_messages::LaneId,
-			messages: Vec<(bp_messages::MessagePayload, bp_messages::OutboundMessageDetails)>,
-		) -> Vec<bp_messages::InboundMessageDetails> {
-			bridge_runtime_common::messages_api::inbound_message_details::<
-				Runtime,
-				WithMillauMessagesInstance,
-			>(lane, messages)
-		}
-	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
@@ -828,18 +628,7 @@ impl_runtime_apis! {
 			use frame_system_benchmarking::Pallet as SystemBench;
 			impl frame_system_benchmarking::Config for Runtime {}
 
-			let whitelist: Vec<TrackedStorageKey> = vec![
-				// Block Number
-				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec().into(),
-				// Total Issuance
-				hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec().into(),
-				// Execution Phase
-				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a").to_vec().into(),
-				// Event Count
-				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850").to_vec().into(),
-				// System Events
-				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7").to_vec().into(),
-			];
+			let mut whitelist: Vec<TrackedStorageKey> = AllPalletsWithSystem::whitelisted_storage_keys();
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
