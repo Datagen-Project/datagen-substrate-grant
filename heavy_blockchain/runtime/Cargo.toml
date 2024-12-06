@@ -70,6 +70,7 @@ pallet-identity = { workspace = true }
 pallet-insecure-randomness-collective-flip  = { workspace = true }
 pallet-sudo = { workspace = true }
 pallet-timestamp = { workspace = true }
+pallet-treasury = { workspace = true }
 pallet-transaction-payment = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 
@@ -85,6 +86,7 @@ staging-parachain-info = { workspace = true }
 
 # Polkadot Dependencies
 parachains-common = { workspace = true }
+polkadot-primitives = { workspace = true }
 polkadot-runtime-common = { workspace = true }
 polkadot-runtime-parachains = { workspace = true }
 polkadot-parachain-primitives = { workspace = true }
@@ -168,6 +170,7 @@ std = [
 	"pallet-insecure-randomness-collective-flip/std",
 	"pallet-sudo/std",
 	"pallet-timestamp/std",
+	"pallet-treasury/std",
 	"pallet-transaction-payment/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 
@@ -181,6 +184,7 @@ std = [
 	"staging-parachain-info/std",
 
 	"parachains-common/std",
+	"polkadot-primitives/std",
 	"polkadot-runtime-parachains/std",
 	"polkadot-runtime-common/std",
 	"polkadot-parachain-primitives/std",

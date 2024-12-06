@@ -56,7 +56,7 @@ pub use frame_support::{
 		constants::{
 			BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND,
 		},
-		IdentityFee, Weight,
+		IdentityFee, Weight, WeightToFee as _,
 	},
 	StorageValue,
 };
@@ -78,6 +78,10 @@ pub use parachains_common::{
 	NORMAL_DISPATCH_RATIO, AVERAGE_ON_INITIALIZE_RATIO,
 };
 
+use polkadot_runtime_parachains::{
+	dmp as parachains_dmp, hrmp as parachains_hrmp, origin as parachains_origin,
+};
+
 pub use pallet_bridge_grandpa::Call as BridgeGrandpaCall;
 pub use pallet_bridge_messages::Call as MessagesCall;
 pub use pallet_xcm::Call as XcmCall;
@@ -96,6 +100,8 @@ use xcm_builder::{
 	SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit, UsingComponents,
 };
 use xcm_executor::{Config, XcmExecutor};
+use polkadot_primitives::Id as ParaId;
+use rococo_runtime_constants::fee::WeightToFee;
 pub use crate::xcm_config::XcmRouter;
 
 pub mod westend_messages;
@@ -279,7 +285,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type OnChargeTransaction = pallet_transaction_payment::CurrencyAdapter<
 		Balances, polkadot_runtime_common::ToAuthor<Runtime>
 	>;
-	type WeightToFee = IdentityFee<Balance>;
+	type WeightToFee = WeightToFee;
 	type LengthToFee = IdentityFee<Balance>;
 	type FeeMultiplierUpdate = polkadot_runtime_common::SlowAdjustingFeeUpdate<Self>;
 	type OperationalFeeMultiplier = OperationalFeeMultiplier;
@@ -421,6 +427,47 @@ type EnsureRootOrHalfCouncil = frame_support::traits::EitherOfDiverse<
 	pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>,
 >;
 
+parameter_types! {
+	pub const TreasuryModuleId: frame_support::PalletId = frame_support::PalletId(*b"py/trsry");
+	pub const ProposalBond: Permill = Permill::from_percent(5);
+	pub const ProposalBondMinimum: Balance = 1 * UNIT;
+	pub const SpendPeriod: BlockNumber = 7 * DAYS;
+	pub const SpendPayoutPeriod: BlockNumber = 30 * DAYS;
+	pub const Burn: Permill = Permill::from_percent(1);
+	pub const MaximumBalance: Balance = Balance::MAX;
+}
+
+impl pallet_treasury::Config for Runtime {
+	type Currency = Balances;
+	type ApproveOrigin = EnsureRootOrHalfCouncil;
+	type RejectOrigin = EnsureRootOrHalfCouncil;
+	type RuntimeEvent = RuntimeEvent;
+	type OnSlash = ();
+	type ProposalBond = ProposalBond;
+	type ProposalBondMinimum = ProposalBondMinimum;
+	type ProposalBondMaximum = ();
+	type SpendPeriod = SpendPeriod;
+	type Burn = Burn;
+	type PalletId = TreasuryModuleId;
+	type BurnDestination = ();
+	type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
+	type SpendFunds = ();
+	type MaxApprovals = ConstU32<100>;
+	type SpendOrigin = frame_system::EnsureWithSuccess<
+		frame_system::EnsureRoot<AccountId>,
+		AccountId,
+		MaximumBalance
+	>;
+	type AssetKind = u32;
+	type Beneficiary = AccountId;
+	type BeneficiaryLookup = ();
+	type Paymaster = ();
+	type BalanceConverter = ();
+	type PayoutPeriod = SpendPayoutPeriod;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
+}
+
 impl pallet_bridge_relayers::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Reward = Balance;
@@ -531,33 +578,45 @@ mod runtime {
 	pub type RandomnessCollectiveFlip = pallet_insecure_randomness_collective_flip;
 
 	#[runtime::pallet_index(10)]
-	pub type XcmpQueue = cumulus_pallet_xcmp_queue;
+	pub type Council = pallet_collective<Instance1>;
 
 	#[runtime::pallet_index(11)]
-	pub type PolkadotXcm = pallet_xcm;
+	pub type TechnicalCommittee = pallet_collective<Instance2>;
 
 	#[runtime::pallet_index(12)]
-	pub type CumulusXcm = cumulus_pallet_xcm;
+	pub type Identity = pallet_identity;
 
 	#[runtime::pallet_index(13)]
-	pub type DmpQueue = cumulus_pallet_dmp_queue;
+	pub type Treasury = pallet_treasury;
 
 	#[runtime::pallet_index(14)]
-	pub type XcmHandler = pallet_xcm_handler;
+	pub type XcmpQueue = cumulus_pallet_xcmp_queue;
 
 	#[runtime::pallet_index(15)]
-	pub type RandomNodeSelector = pallet_random_node_selector;
+	pub type XCMPallet = pallet_xcm;
 
 	#[runtime::pallet_index(16)]
-	pub type BridgeRelayers = pallet_bridge_relayers;
+	pub type CumulusXcm = cumulus_pallet_xcm;
 
 	#[runtime::pallet_index(17)]
-	pub type BridgeWestendGrandpa = pallet_bridge_grandpa;
+	pub type DmpQueue = cumulus_pallet_dmp_queue;
 
 	#[runtime::pallet_index(18)]
-	pub type BridgeWestendMessages = pallet_bridge_messages;
+	pub type XcmHandler = pallet_xcm_handler;
 
 	#[runtime::pallet_index(19)]
+	pub type RandomNodeSelector = pallet_random_node_selector;
+
+	#[runtime::pallet_index(20)]
+	pub type BridgeRelayers = pallet_bridge_relayers;
+
+	#[runtime::pallet_index(21)]
+	pub type BridgeWestendGrandpa = pallet_bridge_grandpa;
+
+	#[runtime::pallet_index(22)]
+	pub type BridgeWestendMessages = pallet_bridge_messages;
+
+	#[runtime::pallet_index(23)]
 	pub type XcmOverBridgeHubWestend = pallet_xcm_bridge_hub;
 
 }

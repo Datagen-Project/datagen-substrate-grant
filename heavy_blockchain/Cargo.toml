@@ -75,6 +75,7 @@ pallet-identity = { git = "https://github.com/paritytech/polkadot-sdk", tag = "p
 pallet-insecure-randomness-collective-flip  = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0" }
 pallet-sudo = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-timestamp = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
+pallet-treasury = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-transaction-payment = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 
@@ -90,6 +91,7 @@ staging-parachain-info = { git = "https://github.com/paritytech/polkadot-sdk", t
 
 # Polkadot Dependencies
 parachains-common = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
+polkadot-primitives = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 polkadot-runtime-common = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 polkadot-runtime-parachains = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 polkadot-parachain-primitives = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
@@ -150,6 +152,5 @@ cumulus-relay-chain-interface = { git = "https://github.com/paritytech/polkadot-
 
 # Polkadot dependencies
 polkadot-cli = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0" }
-polkadot-primitives = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0" }
 polkadot-service = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0" }
 
