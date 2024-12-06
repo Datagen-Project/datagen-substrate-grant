@@ -18,13 +18,13 @@
 
 use super::{
     parachains_origin, AccountId, AllPalletsWithSystem, Balances, Dmp, Fellows, ParaId, Runtime,
-    RuntimeCall, RuntimeEvent, RuntimeOrigin, TransactionByteFee, Treasury, WeightToFee, XcmPallet,
+    RuntimeCall, RuntimeEvent, RuntimeOrigin, TransactionByteFee, Treasury, WeightToFee, XCMPallet,
 };
 
 use frame_support::{
     parameter_types,
     traits::{Contains, Equals, Everything, Nothing},
-    weights::Weight,
+    weights::{Weight},
 };
 use frame_system::EnsureRoot;
 use rococo_runtime_constants::{currency::CENTS, system_parachain::*};
@@ -51,7 +51,7 @@ parameter_types! {
 	pub RootLocation: Location = Location::here();
 	pub const ThisNetwork: NetworkId = NetworkId::Rococo;
 	pub UniversalLocation: InteriorLocation = ThisNetwork::get().into();
-	pub CheckAccount: AccountId = XcmPallet::check_account();
+	pub CheckAccount: AccountId = XCMPallet::check_account();
 	pub LocalCheckAccount: (AccountId, MintLocation) = (CheckAccount::get(), MintLocation::Local);
 	pub TreasuryAccount: AccountId = Treasury::account_id();
 }
@@ -108,7 +108,7 @@ ExponentialPrice<FeeAssetId, BaseDeliveryFee, TransactionByteFee, Dmp>;
 /// individual routers.
 pub type XcmRouter = WithUniqueTopic<
     // Only one router so far - use DMP to communicate with child parachains.
-    ChildParachainRouter<Runtime, XcmPallet, PriceForChildParachainDelivery>,
+    ChildParachainRouter<Runtime, XCMPallet, PriceForChildParachainDelivery>,
 >;
 
 parameter_types! {
@@ -165,7 +165,7 @@ pub type Barrier = TrailingSetTopicAsId<(
     // Weight that is paid for may be consumed.
     TakeWeightCredit,
     // Expected responses are OK.
-    AllowKnownQueryResponses<XcmPallet>,
+    AllowKnownQueryResponses<XCMPallet>,
     WithComputedOrigin<
         (
             // If the message is one that immediately attempts to pay for execution, then allow it.
@@ -192,6 +192,7 @@ impl staging_xcm_executor::Config for XcmConfig {
     type OriginConverter = LocalOriginConverter;
     type IsReserve = ();
     type IsTeleporter = TrustedTeleporters;
+    type Aliasers = Nothing;
     type UniversalLocation = UniversalLocation;
     type Barrier = Barrier;
     type Weigher = WeightInfoBounds<
@@ -201,12 +202,12 @@ impl staging_xcm_executor::Config for XcmConfig {
     >;
     type Trader =
     UsingComponents<WeightToFee, TokenLocation, AccountId, Balances, ToAuthor<Runtime>>;
-    type ResponseHandler = XcmPallet;
-    type AssetTrap = XcmPallet;
+    type ResponseHandler = XCMPallet;
+    type AssetTrap = XCMPallet;
     type AssetLocker = ();
     type AssetExchanger = ();
-    type AssetClaims = XcmPallet;
-    type SubscriptionService = XcmPallet;
+    type AssetClaims = XCMPallet;
+    type SubscriptionService = XCMPallet;
     type PalletInstancesInfo = AllPalletsWithSystem;
     type MaxAssetsIntoHolding = MaxAssetsIntoHolding;
     type FeeManager = XcmFeeManagerFromComponents<
@@ -217,7 +218,6 @@ impl staging_xcm_executor::Config for XcmConfig {
     type UniversalAliases = Nothing;
     type CallDispatcher = RuntimeCall;
     type SafeCallFilter = Everything;
-    type Aliasers = Nothing;
     type TransactionalProcessor = FrameTransactionalProcessor;
     type HrmpNewChannelOpenRequestHandler = ();
     type HrmpChannelAcceptedHandler = ();
