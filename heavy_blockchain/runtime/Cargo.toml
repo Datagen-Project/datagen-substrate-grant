@@ -64,10 +64,12 @@ frame-system-rpc-runtime-api = { workspace = true }
 
 ## Substrate Pallet Dependencies
 pallet-aura = { workspace = true }
+pallet-authority-discovery = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-collective = { workspace = true }
 pallet-identity = { workspace = true }
 pallet-insecure-randomness-collective-flip  = { workspace = true }
+pallet-session = { workspace = true }
 pallet-sudo = { workspace = true }
 pallet-timestamp = { workspace = true }
 pallet-treasury = { workspace = true }
@@ -164,10 +166,12 @@ std = [
 	"frame-system-rpc-runtime-api/std",
 
 	"pallet-aura/std",
+	"pallet-authority-discovery/std",
 	"pallet-balances/std",
 	"pallet-collective/std",
 	"pallet-identity/std",
 	"pallet-insecure-randomness-collective-flip/std",
+	"pallet-session/std",
 	"pallet-sudo/std",
 	"pallet-timestamp/std",
 	"pallet-treasury/std",

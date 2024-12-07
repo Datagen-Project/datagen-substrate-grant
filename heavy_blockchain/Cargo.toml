@@ -69,10 +69,12 @@ frame-system-rpc-runtime-api = { git = "https://github.com/paritytech/polkadot-s
 
 ## Substrate Pallet Dependencies
 pallet-aura = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
+pallet-authority-discovery = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-collective = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-identity = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-insecure-randomness-collective-flip  = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0" }
+pallet-session = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-sudo = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-timestamp = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
 pallet-treasury = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.10.0", default-features = false }
