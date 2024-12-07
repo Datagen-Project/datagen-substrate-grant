@@ -65,6 +65,7 @@ pub use frame_system::{
 	limits::{BlockWeights, BlockLength},
 	EnsureRoot
 };
+use pallet_session::historical as pallet_session_historical;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_sudo::Call as SudoCall;
 pub use pallet_timestamp::Call as TimestampCall;
@@ -80,6 +81,10 @@ pub use parachains_common::{
 
 use polkadot_runtime_parachains::{
 	dmp as parachains_dmp, hrmp as parachains_hrmp, origin as parachains_origin,
+	configuration as parachains_configuration, shared as parachains_shared, paras as parachains_paras,
+	inclusion as parachains_inclusion, scheduler as parachains_scheduler, initializer as parachains_initializer,
+	assigner_coretime as parachains_assigner_coretime, assigner_on_demand as parachains_assigner_on_demand,
+	disputes as parachains_disputes, session_info as parachains_session_info,
 };
 
 pub use pallet_bridge_grandpa::Call as BridgeGrandpaCall;
@@ -101,7 +106,10 @@ use xcm_builder::{
 };
 use xcm_executor::{Config, XcmExecutor};
 use polkadot_primitives::Id as ParaId;
+use polkadot_runtime_parachains::paras::Call;
+use polkadot_runtime_parachains::session_info::AuthorityDiscoveryConfig;
 use rococo_runtime_constants::fee::WeightToFee;
+use sp_runtime::transaction_validity::TransactionPriority;
 pub use crate::xcm_config::XcmRouter;
 
 pub mod westend_messages;
@@ -524,6 +532,115 @@ impl pallet_xcm_handler::Config for Runtime {
 	type XcmSender = XcmRouter;
 }
 
+impl parachains_configuration::Config for Runtime { type WeightInfo = (); }
+
+impl parachains_shared::Config for Runtime { type DisabledValidators = Session; }
+
+impl parachains_dmp::Config for Runtime {}
+
+impl frame_system::offchain::SendTransactionTypes<Call<Self>> for Runtime {
+	type Extrinsic = UncheckedExtrinsic;
+	type OverarchingCall = RuntimeCall;
+}
+
+impl parachains_scheduler::Config for Runtime {
+	type AssignmentProvider = AssignerCoretime;
+}
+
+pub struct RewardValidators;
+impl polkadot_runtime_parachains::inclusion::RewardValidators for RewardValidators {
+	fn reward_backing(_: impl IntoIterator<Item = polkadot_primitives::ValidatorIndex>) {}
+	fn reward_bitfields(_: impl IntoIterator<Item = polkadot_primitives::ValidatorIndex>) {}
+}
+
+impl parachains_inclusion::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type DisputesHandler = Disputes;
+	type RewardValidators = RewardValidators;
+	type MessageQueue = ();
+	type WeightInfo = ();
+}
+
+parameter_types! {
+	pub const ParasUnsignedPriority: TransactionPriority = TransactionPriority::MAX;
+}
+
+impl parachains_paras::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type UnsignedPriority = ParasUnsignedPriority;
+	type NextSessionRotation = ();
+	type QueueFootprinter = ParasInclusion;
+	type OnNewHead = ();
+	type WeightInfo = ();
+	type AssignCoretime = AssignerCoretime;
+}
+
+parameter_types! {
+	pub const OnDemandDefaultValue: sp_runtime::FixedU128 = sp_runtime::FixedU128::from_u32(1);
+}
+
+impl parachains_assigner_on_demand::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type WeightInfo = ();
+	type TrafficDefaultValue = OnDemandDefaultValue;
+}
+
+impl parachains_assigner_coretime::Config for Runtime {}
+
+impl parachains_session_info::Config for Runtime {
+	type ValidatorSet = Historical;
+}
+
+impl parachains_initializer::Config for Runtime {
+	type Randomness = ();
+	type ForceOrigin = EnsureRoot<AccountId>;
+	type CoretimeOnNewSession = ();
+	type WeightInfo = ();
+}
+
+impl parachains_disputes::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RewardValidators = ();
+	type SlashingHandler = ();
+	type WeightInfo = ();
+}
+impl parachains_hrmp::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
+	type ChannelManager = EnsureRoot<AccountId>;
+	type Currency = Balances;
+	type WeightInfo = ();
+}
+
+pub struct ValidatorIdOf;
+impl sp_runtime::traits::Convert<AccountId, Option<AccountId>> for ValidatorIdOf {
+	fn convert(a: AccountId) -> Option<AccountId> {
+		Some(a)
+	}
+}
+
+parameter_types! {
+	pub const Offset: u32 = 0;
+	pub const SessionPeriod: u32 = 900;
+}
+
+impl pallet_session::pallet::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = ValidatorIdOf;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Offset, SessionPeriod>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Offset, SessionPeriod>;
+	type SessionManager = ();
+	type SessionHandler = <SessionKeys as sp_runtime::traits::OpaqueKeys>::KeyTypeIdProviders;
+	type Keys = SessionKeys;
+	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
+}
+
+impl pallet_authority_discovery::Config for Runtime {
+	type MaxAuthorities = ConstU32<100>;
+}
+
 impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
 impl pallet_random_node_selector::Config for Runtime {
@@ -619,6 +736,45 @@ mod runtime {
 	#[runtime::pallet_index(23)]
 	pub type XcmOverBridgeHubWestend = pallet_xcm_bridge_hub;
 
+	// parachains pallets
+	#[runtime::pallet_index(40)]
+	pub type ParachainsOrigin = parachains_origin;
+
+	#[runtime::pallet_index(41)]
+	pub type Configuration = parachains_configuration;
+
+	#[runtime::pallet_index(42)]
+	pub type ParachainsShared = parachains_shared;
+
+	#[runtime::pallet_index(43)]
+	pub type ParasInclusion = parachains_inclusion;
+
+	#[runtime::pallet_index(44)]
+	pub type ParasScheduler = parachains_scheduler;
+
+	#[runtime::pallet_index(45)]
+	pub type Paras = parachains_paras;
+
+	#[runtime::pallet_index(46)]
+	pub type ParachainsInitiliazer = parachains_initializer;
+
+	#[runtime::pallet_index(47)]
+	pub type Dmp = parachains_dmp;
+
+	#[runtime::pallet_index(48)]
+	pub type Hrmp = parachains_hrmp;
+
+	#[runtime::pallet_index(49)]
+	pub type AssignerCoretime = parachains_assigner_coretime;
+
+	#[runtime::pallet_index(50)]
+	pub type AssignerOnDemand = parachains_assigner_on_demand;
+
+	#[runtime::pallet_index(51)]
+	pub type Disputes = parachains_disputes;
+
+	#[runtime::pallet_index(52)]
+	pub type ParaSessionInfo = parachains_session_info;
 }
 
 impl_runtime_apis! {
