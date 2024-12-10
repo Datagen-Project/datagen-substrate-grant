@@ -82,7 +82,7 @@ pub type LocalAssetTransactor = FungibleAdapter<
     LocalCheckAccount,
 >;
 
-/// The means that we convert an the XCM message origin location into a local dispatch origin.
+/// This means that we convert the XCM message origin location into a local dispatch origin.
 type LocalOriginConverter = (
     // A `Signed` origin of the sovereign account that the original location controls.
     SovereignSignedViaLocation<LocationConverter, RuntimeOrigin>,
@@ -283,5 +283,5 @@ impl pallet_xcm::Config for Runtime {
     type MaxLockers = ConstU32<8>;
     type MaxRemoteLockConsumers = ConstU32<0>;
     type RemoteLockConsumerIdentifier = ();
-    type WeightInfo = crate::weights::pallet_xcm::WeightInfo<Runtime>;
+    type WeightInfo = ();
 }

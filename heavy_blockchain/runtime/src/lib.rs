@@ -46,6 +46,7 @@ use sp_version::RuntimeVersion;
 
 // A few exports that help ease life for downstream crates.
 use bp_runtime::HeaderId;
+use bridge_hub_rococo_runtime::xcm_config::XcmOriginToTransactDispatchOrigin;
 pub use frame_support::{
 	derive_impl,
 	construct_runtime,
@@ -107,7 +108,6 @@ use xcm_builder::{
 use xcm_executor::{Config, XcmExecutor};
 use polkadot_primitives::Id as ParaId;
 use polkadot_runtime_parachains::paras::Call;
-use polkadot_runtime_parachains::session_info::AuthorityDiscoveryConfig;
 use rococo_runtime_constants::fee::WeightToFee;
 use sp_runtime::transaction_validity::TransactionPriority;
 pub use crate::xcm_config::XcmRouter;
@@ -330,7 +330,7 @@ impl cumulus_pallet_aura_ext::Config for Runtime {}
 
 impl cumulus_pallet_xcm::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type XcmExecutor = XcmExecutor<XcmConfig>;
+	type XcmExecutor = XcmExecutor<xcm_config::XcmConfig>;
 }
 
 impl cumulus_pallet_xcmp_queue::Config for Runtime {
@@ -686,54 +686,63 @@ mod runtime {
 	pub type AuraExt = cumulus_pallet_aura_ext;
 
 	#[runtime::pallet_index(7)]
-	pub type ParachainSystem = cumulus_pallet_parachain_system;
+	pub type Historical = pallet_session_historical;
 
 	#[runtime::pallet_index(8)]
-	pub type ParachainInfo = staging_parachain_info;
+	pub type Session = pallet_session;
 
 	#[runtime::pallet_index(9)]
-	pub type RandomnessCollectiveFlip = pallet_insecure_randomness_collective_flip;
-
-	#[runtime::pallet_index(10)]
-	pub type Council = pallet_collective<Instance1>;
-
-	#[runtime::pallet_index(11)]
-	pub type TechnicalCommittee = pallet_collective<Instance2>;
-
-	#[runtime::pallet_index(12)]
-	pub type Identity = pallet_identity;
-
-	#[runtime::pallet_index(13)]
-	pub type Treasury = pallet_treasury;
-
-	#[runtime::pallet_index(14)]
-	pub type XcmpQueue = cumulus_pallet_xcmp_queue;
+	pub type AuthorityDiscovery = pallet_authority_discovery;
 
 	#[runtime::pallet_index(15)]
-	pub type XCMPallet = pallet_xcm;
+	pub type ParachainSystem = cumulus_pallet_parachain_system;
 
 	#[runtime::pallet_index(16)]
-	pub type CumulusXcm = cumulus_pallet_xcm;
+	pub type ParachainInfo = staging_parachain_info;
 
 	#[runtime::pallet_index(17)]
-	pub type DmpQueue = cumulus_pallet_dmp_queue;
+	pub type RandomnessCollectiveFlip = pallet_insecure_randomness_collective_flip;
 
 	#[runtime::pallet_index(18)]
-	pub type XcmHandler = pallet_xcm_handler;
+	pub type Council = pallet_collective<Instance1>;
 
 	#[runtime::pallet_index(19)]
-	pub type RandomNodeSelector = pallet_random_node_selector;
+	pub type TechnicalCommittee = pallet_collective<Instance2>;
 
 	#[runtime::pallet_index(20)]
-	pub type BridgeRelayers = pallet_bridge_relayers;
+	pub type Identity = pallet_identity;
 
 	#[runtime::pallet_index(21)]
-	pub type BridgeWestendGrandpa = pallet_bridge_grandpa;
+	pub type Treasury = pallet_treasury;
 
 	#[runtime::pallet_index(22)]
-	pub type BridgeWestendMessages = pallet_bridge_messages;
+	pub type XcmpQueue = cumulus_pallet_xcmp_queue;
 
 	#[runtime::pallet_index(23)]
+	pub type XCMPallet = pallet_xcm;
+
+	#[runtime::pallet_index(24)]
+	pub type CumulusXcm = cumulus_pallet_xcm;
+
+	#[runtime::pallet_index(25)]
+	pub type DmpQueue = cumulus_pallet_dmp_queue;
+
+	#[runtime::pallet_index(26)]
+	pub type XcmHandler = pallet_xcm_handler;
+
+	#[runtime::pallet_index(27)]
+	pub type RandomNodeSelector = pallet_random_node_selector;
+
+	#[runtime::pallet_index(28)]
+	pub type BridgeRelayers = pallet_bridge_relayers;
+
+	#[runtime::pallet_index(29)]
+	pub type BridgeWestendGrandpa = pallet_bridge_grandpa;
+
+	#[runtime::pallet_index(30)]
+	pub type BridgeWestendMessages = pallet_bridge_messages;
+
+	#[runtime::pallet_index(31)]
 	pub type XcmOverBridgeHubWestend = pallet_xcm_bridge_hub;
 
 	// parachains pallets
