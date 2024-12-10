@@ -18,7 +18,7 @@
 
 use crate::{
     xcm_config::UniversalLocation, AccountId, BridgeParachainWestendInstance,
-    BridgeWestendMessages, PolkadotXcm, Runtime, RuntimeEvent,
+    BridgeWestendMessages, XCMPallet, Runtime, RuntimeEvent,
     XcmOverBridgeHubWestend, XcmRouter,
 };
 use bp_messages::LaneId;
@@ -235,7 +235,7 @@ impl pallet_xcm_bridge_hub::Config<XcmOverBridgeHubWestendInstance> for Runtime 
     type BridgeMessagesPalletInstance = WithBridgeHubWestendMessagesInstance;
     type MessageExportPrice = ();
     type DestinationVersion =
-        XcmVersionOfDestAndRemoteBridge<PolkadotXcm, BridgeHubWestendLocation>;
+        XcmVersionOfDestAndRemoteBridge<XCMPallet, BridgeHubWestendLocation>;
     type Lanes = ActiveLanes;
     type LanesSupport = ToBridgeHubWestendXcmBlobHauler;
 }

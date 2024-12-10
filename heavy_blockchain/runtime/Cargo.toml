@@ -81,9 +81,8 @@ cumulus-pallet-aura-ext = { workspace = true }
 cumulus-pallet-parachain-system = { workspace = true }
 cumulus-pallet-dmp-queue = { workspace = true }
 cumulus-pallet-xcm = { workspace = true }
-cumulus-pallet-xcmp-queue = { workspace = true }
+cumulus-pallet-xcmp-queue = { workspace = true, features = ["bridging"] }
 cumulus-primitives-core = { workspace = true }
-cumulus-primitives-timestamp = { workspace = true }
 staging-parachain-info = { workspace = true }
 
 # Polkadot Dependencies
@@ -184,7 +183,6 @@ std = [
 	"cumulus-pallet-xcm/std",
 	"cumulus-pallet-xcmp-queue/std",
 	"cumulus-primitives-core/std",
-	"cumulus-primitives-timestamp/std",
 	"staging-parachain-info/std",
 
 	"parachains-common/std",
@@ -198,5 +196,6 @@ std = [
 	"pallet-xcm/std",
     "pallet-xcm-handler/std",
     "pallet-random-node-selector/std",
-	"pallet-xcm-bridge-hub/std",
+
+	"bridge-runtime-common/std",
 ]
